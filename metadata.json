@@ -1,0 +1,8 @@
+{
+  "name": "EduSphere Digital Classroom",
+  "description": "A comprehensive digital learning platform with AI-powered quiz generation, note management, and student analytics.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
