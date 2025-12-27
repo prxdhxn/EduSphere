@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useToast } from './ToastProvider';
 import { Note } from '../types';
 import { geminiService } from '../services/geminiService';
 
@@ -11,6 +12,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+  const toast = useToast();
 
   const handleAskAI = async (concept: string) => {
     setIsLoadingExplanation(true);
@@ -19,10 +21,24 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
       const res = await geminiService.explainConcept(concept);
       setExplanation(res);
     } catch (e) {
-      alert("AI Tutor is currently busy. Please try again later.");
+      toast.show('AI Tutor is currently busy. Please try again later.', 'error');
     } finally {
       setIsLoadingExplanation(false);
     }
+  };
+
+  const handleDownloadNote = (note: Note) => {
+    const text = `${note.title}\n${'='.repeat(note.title.length)}\n\nBy: ${note.uploadedBy}\nDate: ${new Date(note.createdAt).toLocaleDateString()}\nSubject: ${note.subject}\n\n${note.content}`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${note.title.replace(/\s+/g, '_')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    toast.show('Note downloaded successfully!', 'success');
   };
 
   return (
@@ -79,6 +95,13 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   {isLoadingExplanation ? 'AI IS ANALYZING...' : 'EXPLAIN WITH AI'}
+                </button>
+                <button 
+                  onClick={() => handleDownloadNote(selectedNote)}
+                  className="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all active:scale-95"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                  Download
                 </button>
               </div>
               

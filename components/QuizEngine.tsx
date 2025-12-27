@@ -4,11 +4,12 @@ import { Quiz, QuizResult } from '../types';
 
 interface QuizEngineProps {
   quiz: Quiz;
+  user?: { id: string; name: string };
   onComplete: (result: QuizResult) => void;
   onCancel: () => void;
 }
 
-const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, onComplete, onCancel }) => {
+const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, user, onComplete, onCancel }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [timeLeft, setTimeLeft] = useState(quiz.timeLimit * 60);
@@ -28,18 +29,28 @@ const QuizEngine: React.FC<QuizEngineProps> = ({ quiz, onComplete, onCancel }) =
 
   const handleSubmit = () => {
     let score = 0;
+    const answerDetails: any[] = [];
     quiz.questions.forEach((q, idx) => {
-      if (answers[idx] === q.correctAnswer) {
+      const isCorrect = answers[idx] === q.correctAnswer;
+      if (isCorrect) {
         score++;
       }
+      answerDetails.push({
+        questionIndex: idx,
+        selectedAnswer: answers[idx] ?? -1,
+        correct: isCorrect
+      });
     });
 
     onComplete({
       id: `res-${Date.now()}`,
       quizId: quiz.id,
-      studentId: 's1',
+      studentId: user?.id || 's1',
+      studentName: user?.name || 'Anonymous',
       score,
       totalQuestions: quiz.questions.length,
+      completedAt: new Date().toISOString(),
+      answers: answerDetails,
       date: new Date().toISOString()
     });
   };

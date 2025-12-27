@@ -9,7 +9,7 @@ export const geminiService = {
    */
   async generateQuiz(topic: string, count: number = 5) {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash-preview',
       contents: `Generate a quiz with ${count} questions about: ${topic}. 
       The output must be a valid JSON array of objects with the following structure:
       {

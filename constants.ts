@@ -1,13 +1,25 @@
 
 import { UserRole, Note, Quiz } from './types';
 
+// Predefined teachers - only these can login as teacher
+export const PREDEFINED_TEACHERS = [
+  {
+    id: 't1',
+    name: 'Pradhan',
+    email: 'pradhan@edu.com',
+    password: 'pradhan123',
+    role: UserRole.TEACHER,
+    avatar: 'https://picsum.photos/seed/pradhan/200'
+  }
+];
+
 export const MOCK_USERS = {
   teacher: {
     id: 't1',
-    name: 'Prof. Sarah Miller',
-    email: 'sarah.miller@edu.com',
+    name: 'Pradhan',
+    email: 'pradhan@edu.com',
     role: UserRole.TEACHER,
-    avatar: 'https://picsum.photos/seed/sarah/200'
+    avatar: 'https://picsum.photos/seed/pradhan/200'
   },
   student: {
     id: 's1',

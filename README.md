@@ -4,17 +4,35 @@
 
 # Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+This repository contains everything you need to run the app locally.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1ummIkOigFWK0A2_5nvyA0jvSB7zUsClh
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2. Create a `.env` file in the project root and set your Gemini API key:
+
+```
+GEN_API_KEY=your_api_key_here
+```
+
+3. Run both the Express proxy server and Vite together (recommended):
+
+```
+npm run dev:all
+```
+
+This runs the server proxy at `http://localhost:4000` and the frontend via Vite (port chosen automatically).
+
+Alternatives:
+
+- Run server only: `npm run server:watch`
+- Run frontend only: `npm run dev`
+
+Notes:
+- Login drafts and the logged-in user are persisted in `localStorage`.
+- You must set `GEN_API_KEY` to use the AI quiz generator.

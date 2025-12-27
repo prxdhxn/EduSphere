@@ -1,0 +1,23 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Outer rings -->
+  <ellipse cx="50" cy="50" rx="42" ry="28" fill="none" stroke="#0066CC" stroke-width="5" opacity="0.9" transform="rotate(0 50 50)"/>
+  <ellipse cx="50" cy="50" rx="42" ry="28" fill="none" stroke="#00BCD4" stroke-width="5" opacity="0.9" transform="rotate(60 50 50)"/>
+  <ellipse cx="50" cy="50" rx="42" ry="28" fill="none" stroke="#7C3AED" stroke-width="5" opacity="0.9" transform="rotate(-60 50 50)"/>
+  
+  <!-- Center electrons -->
+  <circle cx="50" cy="22" r="4" fill="#00BCD4"/>
+  <circle cx="64" cy="61" r="4" fill="#0066CC"/>
+  <circle cx="36" cy="61" r="4" fill="#7C3AED"/>
+  
+  <!-- Center nucleus -->
+  <g>
+    <circle cx="50" cy="50" r="12" fill="none" stroke="#0066CC" stroke-width="1.5"/>
+    <circle cx="50" cy="50" r="10" fill="none" stroke="#00BCD4" stroke-width="1.5"/>
+    <circle cx="50" cy="50" r="8" fill="none" stroke="#7C3AED" stroke-width="1.5"/>
+    <circle cx="50" cy="50" r="3" fill="#00BCD4"/>
+  </g>
+  
+  <!-- Arrow (growth/upward) -->
+  <path d="M 70 25 L 80 15 L 85 20 L 75 30" fill="#00BCD4" opacity="0.95"/>
+  <line x1="70" y1="25" x2="78" y2="17" stroke="#00BCD4" stroke-width="2" opacity="0.95"/>
+</svg>

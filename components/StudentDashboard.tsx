@@ -1,7 +1,9 @@
 
 import React, { useState } from 'react';
+import { FiBook, FiPlay } from 'react-icons/fi';
+import { useToast } from './ToastProvider';
 import { User, Note, Quiz, QuizResult } from '../types';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ProgressChart from './ProgressChart';
 
 interface StudentDashboardProps {
   user: User;
@@ -10,12 +12,14 @@ interface StudentDashboardProps {
   results: QuizResult[];
   onStartQuiz: (quiz: Quiz) => void;
   onAddNote: (note: Note) => void;
+  setActiveTab?: (tab: string) => void;
 }
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizzes, results, onStartQuiz, onAddNote }) => {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
 
+  const toast = useToast();
   const handleAddNote = () => {
     if (!noteTitle || !noteContent) return;
     const newNote: Note = {
@@ -29,11 +33,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizze
     onAddNote(newNote);
     setNoteTitle('');
     setNoteContent('');
-    alert("Resource shared with the community!");
+    toast.show('Resource shared with the community!', 'success');
   };
 
   const chartData = results.map(r => ({
-    name: new Date(r.date).toLocaleDateString(),
+    name: new Date(r.completedAt || r.date).toLocaleDateString(),
     score: (r.score / r.totalQuestions) * 100
   }));
 
@@ -41,17 +45,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizze
     <div className="space-y-8">
       {/* Stats Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-sm font-medium">Pending Quizzes</p>
-          <h3 className="text-3xl font-bold text-slate-800">{quizzes.length}</h3>
+        <div className="md:col-span-3 flex justify-end">
+          <button
+            onClick={() => setActiveTab && setActiveTab('notes')}
+            className="text-sm text-indigo-600 dark:text-indigo-400 font-semibold px-3 py-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+          >
+            View Library
+          </button>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-sm font-medium">Shared Resources</p>
-          <h3 className="text-3xl font-bold text-slate-800">{notes.length}</h3>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+          <p className="text-slate-400 dark:text-slate-400 text-sm font-medium">Pending Quizzes</p>
+          <h3 className="text-3xl font-bold text-slate-800 dark:text-slate-100">{quizzes.length}</h3>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-400 text-sm font-medium">Average Score</p>
-          <h3 className="text-3xl font-bold text-slate-800">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+          <p className="text-slate-400 dark:text-slate-400 text-sm font-medium">Shared Resources</p>
+          <h3 className="text-3xl font-bold text-slate-800 dark:text-slate-100">{notes.length}</h3>
+        </div>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+          <p className="text-slate-400 dark:text-slate-400 text-sm font-medium">Average Score</p>
+          <h3 className="text-3xl font-bold text-slate-800 dark:text-slate-100">
             {results.length > 0 
               ? `${Math.round(results.reduce((acc, curr) => acc + (curr.score/curr.totalQuestions)*100, 0) / results.length)}%` 
               : 'N/A'}
@@ -61,28 +73,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizze
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Progress Chart */}
-        <div className="lg:col-span-2 bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-xl font-bold text-slate-800 mb-6">Performance Trend</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                <YAxis unit="%" fontSize={10} axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5' }} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="lg:col-span-2">
+          <ProgressChart results={results} height={320} />
         </div>
 
         {/* Share Resource Card */}
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 rounded-2xl shadow-xl text-white">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-white/20 rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+              <FiBook className="w-5 h-5" />
             </div>
             <h3 className="text-lg font-bold">Share Study Guide</h3>
           </div>
@@ -113,22 +112,23 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizze
       </div>
 
       {/* Quizzes to take */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-        <h3 className="text-xl font-bold text-slate-800 mb-6">Active Assessments</h3>
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">Active Assessments</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {quizzes.length === 0 ? (
-            <p className="text-slate-400">No active quizzes at the moment.</p>
+            <p className="text-slate-400 dark:text-slate-400">No active quizzes at the moment.</p>
           ) : (
             quizzes.map((quiz) => (
-              <div key={quiz.id} className="flex items-center justify-between p-5 bg-slate-50 border border-slate-100 rounded-2xl group hover:border-indigo-200 transition-all">
+              <div key={quiz.id} className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 rounded-2xl group hover:border-indigo-200 dark:hover:border-indigo-500 transition-all">
                 <div>
-                  <h4 className="font-bold text-slate-800">{quiz.title}</h4>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mt-1">{quiz.subject} • {quiz.timeLimit} mins</p>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-100">{quiz.title}</h4>
+                  <p className="text-xs text-slate-400 dark:text-slate-400 font-medium uppercase tracking-wider mt-1">{quiz.subject} • {quiz.timeLimit} mins</p>
                 </div>
                 <button 
                   onClick={() => onStartQuiz(quiz)}
-                  className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+                  className="px-5 py-2.5 bg-indigo-600 dark:bg-indigo-700 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-md active:scale-95 flex items-center gap-2"
                 >
+                  <FiPlay size={16} />
                   Start Quiz
                 </button>
               </div>

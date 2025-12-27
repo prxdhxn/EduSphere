@@ -1,7 +1,11 @@
 
 import React, { useState } from 'react';
+import { FiPlus, FiZap } from 'react-icons/fi';
+import { useToast } from './ToastProvider';
 import { User, Note, Quiz, QuizResult, UserRole } from '../types';
-import { geminiService } from '../services/geminiService';
+// Use server proxy for Gemini to avoid exposing API keys
+
+import QuizPreview from './QuizPreview';
 
 interface TeacherDashboardProps {
   user: User;
@@ -10,41 +14,67 @@ interface TeacherDashboardProps {
   results: QuizResult[];
   onAddQuiz: (quiz: Quiz) => void;
   onAddNote: (note: Note) => void;
+  setActiveTab?: (tab: string) => void;
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, notes, quizzes, results, onAddQuiz, onAddNote }) => {
+  const toast = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [topic, setTopic] = useState('');
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewQuestions, setPreviewQuestions] = useState<any[]>([]);
 
   const handleGenerateAIQuiz = async () => {
-    if (!topic) return alert("Please enter a topic");
+    if (!topic) return toast.show('Please enter a topic', 'error');
     setIsGenerating(true);
     try {
-      const generatedQuestions = await geminiService.generateQuiz(topic);
+      const resp = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, count: 5 })
+      });
+      if (!resp.ok) throw new Error('Server error while generating quiz');
+      const body = await resp.json();
+      const generatedQuestions = body.questions || [];
       if (generatedQuestions && generatedQuestions.length > 0) {
-        const newQuiz: Quiz = {
-          id: `q-${Date.now()}`,
-          title: `AI Generated Quiz: ${topic}`,
-          subject: 'General Science',
-          timeLimit: 15,
-          questions: generatedQuestions.map((q: any, i: number) => ({
-            ...q,
-            id: `qu-${i}-${Date.now()}`
-          })),
-          createdBy: user.name,
-          createdAt: new Date().toISOString()
-        };
-        onAddQuiz(newQuiz);
-        setTopic('');
-        alert("Quiz generated successfully!");
+        // open preview modal so teacher can edit before saving
+        setPreviewQuestions(generatedQuestions.map((q: any) => ({
+          text: q.text || '',
+          options: q.options || [],
+          correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0
+        })));
+        setPreviewOpen(true);
+      } else {
+        toast.show('No questions returned from AI', 'error');
       }
     } catch (err) {
-      alert("Error generating quiz. Please try again.");
+      toast.show('Error generating quiz. Please try again.', 'error');
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleSaveFromPreview = (questions: any[]) => {
+    const newQuiz: Quiz = {
+      id: `q-${Date.now()}`,
+      title: `AI Generated Quiz: ${topic}`,
+      subject: 'General Science',
+      timeLimit: 15,
+      questions: questions.map((q, i) => ({
+        id: `qu-${i}-${Date.now()}`,
+        text: q.text,
+        options: q.options,
+        correctAnswer: q.correctAnswer
+      })),
+      createdBy: user.name,
+      createdAt: new Date().toISOString()
+    };
+    onAddQuiz(newQuiz);
+    setPreviewOpen(false);
+    setTopic('');
+    toast.show('Quiz generated and saved.', 'success');
   };
 
   const handleAddNote = () => {
@@ -60,19 +90,33 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, notes, quizze
     onAddNote(newNote);
     setNoteTitle('');
     setNoteContent('');
-    alert("Material shared with class!");
+    toast.show('Material shared with class!', 'success');
   };
 
   return (
     <div className="space-y-8">
+      {previewOpen && (
+        <QuizPreview
+          questions={previewQuestions}
+          onClose={() => setPreviewOpen(false)}
+          onSave={handleSaveFromPreview}
+        />
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="col-span-full flex justify-end">
+          {/** quick link to course content on the left nav */}
+          <button
+            onClick={() => setActiveTab && setActiveTab('notes')}
+            className="text-sm text-indigo-600 dark:text-indigo-400 font-semibold px-3 py-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+          >
+            View Course Content
+          </button>
+        </div>
         {/* AI Quiz Generator */}
         <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-2xl shadow-xl text-white">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-white/20 rounded-lg">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <FiZap className="w-6 h-6" />
             </div>
             <h3 className="text-2xl font-bold">AI Quiz Generator</h3>
           </div>
@@ -88,65 +132,71 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, notes, quizze
             <button 
               onClick={handleGenerateAIQuiz}
               disabled={isGenerating}
-              className={`w-full py-3 bg-white text-indigo-600 font-bold rounded-xl transition-all ${isGenerating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-50 shadow-lg active:scale-[0.98]'}`}
+              className={`w-full py-3 bg-white text-indigo-600 font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${isGenerating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-50 shadow-lg active:scale-[0.98]'}`}
             >
-              {isGenerating ? 'Generating Quiz...' : 'Generate 5 Question Quiz'}
+              {isGenerating ? (
+                <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25"></circle><path d="M22 12a10 10 0 00-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"></path></svg> Generating...</>
+              ) : (
+                <><FiZap size={18} /> Generate 5 Question Quiz</>
+              )}
             </button>
           </div>
         </div>
 
         {/* Note Uploader */}
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-xl font-bold text-slate-800 mb-6">Share Course Content</h3>
-          <p className="text-slate-400 text-sm mb-6">Publish notes, reading materials, or assignment details to the knowledge base.</p>
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
+            <FiPlus className="text-indigo-600 dark:text-indigo-400" size={24} /> Share Course Content
+          </h3>
+          <p className="text-slate-400 dark:text-slate-400 text-sm mb-6">Publish notes, reading materials, or assignment details to the knowledge base.</p>
           <div className="space-y-4">
             <input 
               type="text" 
               placeholder="Title of notes"
               value={noteTitle}
               onChange={(e) => setNoteTitle(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium transition-colors"
             />
             <textarea 
               placeholder="Paste content here..."
               value={noteContent}
               onChange={(e) => setNoteContent(e.target.value)}
               rows={4}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none transition-colors"
             />
             <button 
               onClick={handleAddNote}
-              className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md active:scale-[0.98]"
+              className="w-full py-3 bg-indigo-600 dark:bg-indigo-700 text-white font-bold rounded-xl hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-2"
             >
-              Post to Knowledge Base
+              <FiPlus size={18} /> Post to Knowledge Base
             </button>
           </div>
         </div>
       </div>
 
       {/* Class Statistics */}
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-        <h3 className="text-xl font-bold text-slate-800 mb-6">Recent Student Activity</h3>
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors">
+        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6">Recent Student Activity</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-400 text-sm">
+              <tr className="border-b border-slate-100 dark:border-slate-600 text-slate-400 dark:text-slate-400 text-sm">
                 <th className="pb-4 font-bold uppercase tracking-wider text-[10px]">Student Name</th>
                 <th className="pb-4 font-bold uppercase tracking-wider text-[10px]">Assessment</th>
                 <th className="pb-4 font-bold uppercase tracking-wider text-[10px]">Score</th>
                 <th className="pb-4 font-bold uppercase tracking-wider text-[10px]">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {results.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400 italic">No student attempts recorded yet.</td>
+                  <td colSpan={4} className="py-8 text-center text-slate-400 dark:text-slate-400 italic">No student attempts recorded yet.</td>
                 </tr>
               ) : (
                 results.map((res) => (
-                  <tr key={res.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-4 font-bold text-slate-700">Alex Johnson</td>
-                    <td className="py-4 text-slate-600">{quizzes.find(q => q.id === res.quizId)?.title || 'Deleted Quiz'}</td>
+                  <tr key={res.id} className="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    <td className="py-4 font-bold text-slate-700 dark:text-slate-200">Alex Johnson</td>
+                    <td className="py-4 text-slate-600 dark:text-slate-400">{quizzes.find(q => q.id === res.quizId)?.title || 'Deleted Quiz'}</td>
                     <td className="py-4">
                       <span className={`font-black text-lg ${res.score / res.totalQuestions > 0.5 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {res.score}/{res.totalQuestions}
