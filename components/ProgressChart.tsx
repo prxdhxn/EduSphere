@@ -23,11 +23,27 @@ const ProgressChart: React.FC<ProgressChartProps> = ({ results, title = 'Your Pr
   // Transform results into chart data with date labels
   const chartData = results
     .sort((a, b) => new Date(a.completedAt || a.date).getTime() - new Date(b.completedAt || b.date).getTime())
-    .map((result, index) => ({
-      time: new Date(result.completedAt || result.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }),
-      score: Math.round((result.score / result.totalQuestions) * 100),
-      quizNumber: index + 1,
-    }));
+    .map((result, index) => {
+      const date = new Date(result.completedAt || result.date);
+      const score = Math.round((result.score / result.totalQuestions) * 100);
+      return {
+        time: `Quiz ${index + 1}`, // Use quiz number instead of date for same-day quizzes
+        score: score,
+        quizNumber: index + 1,
+        fullDate: date.toISOString(),
+        rawScore: result.score,
+        totalQuestions: result.totalQuestions,
+        dateTime: date.toLocaleString('en-US', { 
+          month: 'short', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })
+      };
+    });
+
+  // Debug log to see what data we're working with
+  console.log('ProgressChart data:', chartData);
 
   // Handle empty data
   if (chartData.length === 0) {
@@ -70,11 +86,23 @@ const ProgressChart: React.FC<ProgressChartProps> = ({ results, title = 'Your Pr
               tickLine={false}
             />
             <Tooltip 
-              formatter={(value: number) => `${value}%`}
+              formatter={(value: number, name: string, props: any) => {
+                console.log('Tooltip data:', { value, name, props });
+                return [`${value}%`, 'Quiz Score'];
+              }}
+              labelFormatter={(label, payload) => {
+                console.log('Tooltip label:', { label, payload });
+                if (payload && payload[0]) {
+                  const data = payload[0].payload;
+                  return `${label} - ${data.dateTime} (${data.rawScore}/${data.totalQuestions})`;
+                }
+                return label;
+              }}
               contentStyle={{ 
                 backgroundColor: '#fff', 
                 border: '1px solid #e2e8f0',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                padding: '12px'
               }}
             />
             <Legend />
@@ -82,11 +110,12 @@ const ProgressChart: React.FC<ProgressChartProps> = ({ results, title = 'Your Pr
               type="monotone" 
               dataKey="score" 
               stroke="#4f46e5" 
+              strokeWidth={3}
               fillOpacity={1} 
               fill="url(#colorScore)"
               name="Quiz Score"
-              dot={{ fill: '#4f46e5', r: 5 }}
-              activeDot={{ r: 7 }}
+              dot={{ fill: '#4f46e5', r: 6, strokeWidth: 2, stroke: '#fff' }}
+              activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }}
             />
           </AreaChart>
         </ResponsiveContainer>

@@ -1,18 +1,21 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useToast } from './ToastProvider';
 import { Note } from '../types';
 import { geminiService } from '../services/geminiService';
 
 interface NotesViewProps {
   notes: Note[];
+  onRefresh?: () => void;
 }
 
-const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
+const NotesView: React.FC<NotesViewProps> = ({ notes, onRefresh }) => {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [explanation, setExplanation] = useState<string | null>(null);
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const toast = useToast();
+
+  // Remove automatic refresh - only manual refresh now
 
   const handleAskAI = async (concept: string) => {
     setIsLoadingExplanation(true);
@@ -46,7 +49,20 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
       <div className="md:col-span-1 space-y-4">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-black text-slate-800 tracking-tight">Knowledge Base</h3>
-          <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-black uppercase">{notes.length} Total</span>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-black uppercase">{notes.length} Total</span>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                title="Refresh notes"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
           {notes.map(note => (
@@ -59,7 +75,14 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
                   : 'border-white bg-white hover:border-indigo-100 shadow-sm'
               }`}
             >
-              <h4 className="font-bold text-slate-800 leading-tight mb-2">{note.title}</h4>
+              <h4 className="font-bold text-slate-800 leading-tight mb-2 flex items-center gap-2">
+                {note.title}
+                {note.fileUrl && (
+                  <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                )}
+              </h4>
               <div className="flex flex-wrap gap-2 items-center">
                 <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${note.id.startsWith('n-std') ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
                   {note.subject}
@@ -111,6 +134,28 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
                 {selectedNote.content.split('\n').map((para, idx) => (
                   <p key={idx} className="mb-6">{para}</p>
                 ))}
+                
+                {/* Show file attachment if available */}
+                {selectedNote.fileUrl && (
+                  <div className="mt-8 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-700">
+                    <div className="flex items-center gap-3">
+                      <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      <div>
+                        <p className="font-bold text-indigo-900 dark:text-indigo-100">File Attachment</p>
+                        <a 
+                          href={selectedNote.fileUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 font-medium underline"
+                        >
+                          Download File
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -139,8 +184,16 @@ const NotesView: React.FC<NotesViewProps> = ({ notes }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
-            <h4 className="text-2xl font-black text-slate-800 mb-2">Library Empty?</h4>
-            <p className="max-w-xs font-medium text-slate-400">Select a course module from the left to dive into the learning materials.</p>
+            <h4 className="text-2xl font-black text-slate-800 mb-2">No Course Content Yet</h4>
+            <p className="max-w-xs font-medium text-slate-400 mb-4">Select a course module from the left or check back later for new materials.</p>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-sm font-medium"
+              >
+                🔄 Check for Updates
+              </button>
+            )}
           </div>
         )}
       </div>

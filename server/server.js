@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import multer from 'multer';
+import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import mongoose from 'mongoose';
@@ -10,6 +12,38 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // Make sure this directory exists
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /pdf|doc|docx|txt/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only PDF, DOC, DOCX, and TXT files are allowed'));
+    }
+  }
+});
+
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
 
 // Initialize Supabase client (prefer server-side service role key if present)
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -51,8 +85,10 @@ const noteSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   title: String,
   content: String,
+  subject: String,
   student_id: String,
   student_name: String,
+  fileUrl: String,
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });
@@ -142,6 +178,32 @@ app.post('/api/generate-quiz', async (req, res) => {
   }
 });
 
+// Explain concept endpoint
+app.post('/api/explain-concept', async (req, res) => {
+  const { concept } = req.body || {};
+  if (!concept) return res.status(400).json({ error: 'Missing concept' });
+
+  try {
+    if (!API_KEY) {
+      console.warn('GEN_API_KEY missing — returning mock explanation');
+      const mockExplanation = `Here's a simple explanation of the concept:\n\n• This is a fundamental topic in the subject area\n• It involves understanding key principles and applications\n• Students should focus on practical examples and real-world usage\n• Practice and repetition help reinforce the learning\n\nFor more detailed information, consult your textbook or ask your instructor.`;
+      return res.json({ explanation: mockExplanation });
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Explain the following educational concept in a simple, easy-to-understand way for a student: ${concept}. Use bullet points for key takeaways. Keep it under 200 words.`,
+    });
+
+    const explanation = response?.text || response?.output || 'Unable to generate explanation at this time.';
+    return res.json({ explanation });
+  } catch (err) {
+    console.error('Gemini explain error', err);
+    const mockExplanation = `Here's a simple explanation of the concept:\n\n• This is a fundamental topic in the subject area\n• It involves understanding key principles and applications\n• Students should focus on practical examples and real-world usage\n• Practice and repetition help reinforce the learning\n\nFor more detailed information, consult your textbook or ask your instructor.`;
+    return res.json({ explanation: mockExplanation, warning: 'Gemini request failed, returned mock explanation' });
+  }
+});
+
 function generateMockQuestions(topic, count) {
   const examples = [
     {
@@ -168,15 +230,86 @@ function generateMockQuestions(topic, count) {
   return out;
 }
 
+// Get all quizzes endpoint
+app.get('/api/get-quizzes', async (req, res) => {
+  try {
+    const quizzes = await Quiz.find({}).sort({ created_at: -1 }).lean().exec();
+    
+    // Transform the data to match frontend expectations
+    const transformedQuizzes = quizzes.map(quiz => ({
+      id: quiz.id,
+      title: quiz.title,
+      subject: quiz.subject,
+      timeLimit: quiz.timeLimit,
+      questions: quiz.questions,
+      createdBy: quiz.created_by,
+      createdAt: quiz.created_at
+    }));
+    
+    res.json({ success: true, quizzes: transformedQuizzes });
+  } catch (err) {
+    console.error('Get quizzes error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all results endpoint
+app.get('/api/get-results', async (req, res) => {
+  try {
+    const results = await Result.find({}).sort({ completed_at: -1 }).lean().exec();
+    
+    const transformedResults = results.map(result => ({
+      id: result.id,
+      quizId: result.quiz_id,
+      studentId: result.student_id,
+      studentName: result.student_name,
+      score: result.score,
+      totalQuestions: result.total_questions,
+      answers: result.answers,
+      completedAt: result.completed_at,
+      date: result.completed_at // For compatibility
+    }));
+    
+    res.json({ success: true, results: transformedResults });
+  } catch (err) {
+    console.error('Get results error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all notes endpoint
+app.get('/api/get-notes', async (req, res) => {
+  try {
+    const notes = await Note.find({}).sort({ created_at: -1 }).lean().exec();
+    
+    const transformedNotes = notes.map(note => ({
+      id: note.id,
+      title: note.title,
+      subject: note.subject || 'General',
+      content: note.content,
+      uploadedBy: note.student_name || note.uploadedBy || 'Unknown',
+      createdAt: note.created_at,
+      fileUrl: note.fileUrl
+    }));
+    
+    res.json({ success: true, notes: transformedNotes });
+  } catch (err) {
+    console.error('Get notes error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Save quiz endpoint
 app.post('/api/save-quiz', async (req, res) => {
   try {
-    const { id, subject, numberOfQuestions, questions, createdBy, createdAt } = req.body;
+    const { id, title, subject, timeLimit, questions, createdBy, createdAt } = req.body;
 
     const doc = new Quiz({
       id,
+      title,
       subject,
-      number_of_questions: numberOfQuestions,
+      timeLimit,
+      number_of_questions: questions?.length || 0,
       questions,
       created_by: createdBy,
       created_at: createdAt || new Date()
@@ -214,18 +347,40 @@ app.post('/api/save-result', async (req, res) => {
   }
 });
 
+// File upload endpoint for notes
+app.post('/api/upload-file', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ 
+      success: true, 
+      fileUrl: fileUrl,
+      originalName: req.file.originalname,
+      size: req.file.size
+    });
+  } catch (err) {
+    console.error('File upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Save note endpoint
 app.post('/api/save-note', async (req, res) => {
   try {
-    const { id, title, content, studentId, studentName, createdAt } = req.body;
+    const { id, title, subject, content, uploadedBy, createdAt, fileUrl } = req.body;
 
     const doc = new Note({
       id,
       title,
       content,
-      student_id: studentId,
-      student_name: studentName,
-      created_at: createdAt || new Date()
+      student_id: uploadedBy, // Use uploadedBy as student_id for compatibility
+      student_name: uploadedBy,
+      created_at: createdAt || new Date(),
+      subject: subject,
+      fileUrl: fileUrl
     });
 
     const saved = await doc.save();

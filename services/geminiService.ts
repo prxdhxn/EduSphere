@@ -1,59 +1,38 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
 export const geminiService = {
   /**
-   * Generates a quiz based on a given topic using Gemini
+   * Generates a quiz based on a given topic using backend API
    */
   async generateQuiz(topic: string, count: number = 5) {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash-preview',
-      contents: `Generate a quiz with ${count} questions about: ${topic}. 
-      The output must be a valid JSON array of objects with the following structure:
-      {
-        "text": "The question text",
-        "options": ["Option A", "Option B", "Option C", "Option D"],
-        "correctAnswer": 0 (index of the correct option)
-      }`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              text: { type: Type.STRING },
-              options: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              correctAnswer: { type: Type.INTEGER }
-            },
-            required: ["text", "options", "correctAnswer"]
-          }
-        }
-      }
+    const response = await fetch('/api/generate-quiz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, count })
     });
-
-    try {
-      return JSON.parse(response.text);
-    } catch (e) {
-      console.error("Failed to parse Gemini response", e);
-      return [];
+    
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to generate quiz');
     }
+    
+    return data.questions;
   },
 
   /**
-   * Summarizes notes or explains concepts
+   * Explains concepts using backend API
    */
   async explainConcept(concept: string) {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Explain the following educational concept in a simple, easy-to-understand way for a student: ${concept}. 
-      Use bullet points for key takeaways. Keep it under 200 words.`,
+    const response = await fetch('/api/explain-concept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ concept })
     });
-    return response.text;
+    
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to explain concept');
+    }
+    
+    return data.explanation;
   }
 };

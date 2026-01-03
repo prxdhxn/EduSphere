@@ -25,6 +25,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, notes, quizze
   const [noteContent, setNoteContent] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewQuestions, setPreviewQuestions] = useState<any[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
 
   const handleGenerateAIQuiz = async () => {
     if (!topic) return toast.show('Please enter a topic', 'error');
@@ -77,21 +80,67 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, notes, quizze
     toast.show('Quiz generated and saved.', 'success');
   };
 
-  const handleAddNote = () => {
-    if (!noteTitle || !noteContent) return;
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload-file', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setUploadedFileUrl(data.fileUrl);
+        const fileInfo = `\n\n[📎 Attached File: ${data.originalName} (${(data.size / 1024 / 1024).toFixed(2)} MB)]`;
+        setNoteContent(prev => prev + fileInfo);
+        toast.show(`File "${data.originalName}" uploaded successfully`, 'success');
+        return data.fileUrl;
+      } else {
+        throw new Error(data.error || 'Upload failed');
+      }
+    } catch (err) {
+      console.error('File upload error:', err);
+      toast.show('Failed to upload file', 'error');
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileSelect = async (file: File) => {
+    setUploadedFile(file);
+    // Immediately upload the file
+    await handleFileUpload(file);
+  };
+
+  const handleAddNote = async () => {
+    if (!noteTitle || (!noteContent && !uploadedFileUrl)) {
+      toast.show('Please provide a title and either content or upload a file', 'error');
+      return;
+    }
+    
     const newNote: Note = {
       id: `n-tch-${Date.now()}`,
       title: noteTitle,
       subject: 'Official Course Material',
-      content: noteContent,
-      uploadedBy: user.name, // Save the actual teacher name
-      createdAt: new Date().toISOString()
+      content: noteContent || 'See attached file for content.',
+      uploadedBy: user.name,
+      createdAt: new Date().toISOString(),
+      fileUrl: uploadedFileUrl || undefined
     };
     onAddNote(newNote);
     setNoteTitle('');
     setNoteContent('');
+    setUploadedFile(null);
+    setUploadedFileUrl(null);
     toast.show('Material shared with class!', 'success');
   };
+
+  // Computed value for button state
+  const canPost = noteTitle && (noteContent.trim() || uploadedFileUrl);
 
   return (
     <div className="space-y-8">
@@ -164,9 +213,83 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, notes, quizze
               rows={4}
               className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none transition-colors"
             />
+            
+            {/* File Upload Section */}
+            <div className="border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-xl p-6 text-center">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleFileSelect(file);
+                  }
+                }}
+                className="hidden"
+                id="file-upload"
+                disabled={isUploading}
+              />
+              
+              {!uploadedFile && !isUploading && (
+                <label 
+                  htmlFor="file-upload" 
+                  className="cursor-pointer flex flex-col items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <span className="text-sm font-medium">Click to upload PDF, DOC, or TXT files</span>
+                  <span className="text-xs text-slate-400">Max file size: 10MB</span>
+                </label>
+              )}
+              
+              {isUploading && (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm font-medium text-indigo-600">Uploading file...</span>
+                </div>
+              )}
+              
+              {uploadedFile && !isUploading && uploadedFileUrl && (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium">File uploaded successfully!</span>
+                  </div>
+                  <div className="text-xs text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                    📎 {uploadedFile.name} ({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </div>
+                  <div className="flex gap-2">
+                    <a 
+                      href={uploadedFileUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      Preview File
+                    </a>
+                    <button
+                      onClick={() => {
+                        setUploadedFile(null);
+                        setUploadedFileUrl(null);
+                        // Remove file info from content
+                        setNoteContent(prev => prev.replace(/\n\n\[📎 Attached File:.*?\]/g, ''));
+                      }}
+                      className="text-xs text-red-600 hover:text-red-800 underline"
+                    >
+                      Remove File
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <button 
               onClick={handleAddNote}
-              className="w-full py-3 bg-indigo-600 dark:bg-indigo-700 text-white font-bold rounded-xl hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-2"
+              disabled={!canPost}
+              className="w-full py-3 bg-indigo-600 dark:bg-indigo-700 text-white font-bold rounded-xl hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FiPlus size={18} /> Post to Knowledge Base
             </button>

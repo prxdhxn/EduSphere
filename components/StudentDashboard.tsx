@@ -15,7 +15,7 @@ interface StudentDashboardProps {
   setActiveTab?: (tab: string) => void;
 }
 
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizzes, results, onStartQuiz, onAddNote }) => {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizzes, results, onStartQuiz, onAddNote, setActiveTab }) => {
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
 
@@ -35,11 +35,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, notes, quizze
     setNoteContent('');
     toast.show('Resource shared with the community!', 'success');
   };
-
-  const chartData = results.map(r => ({
-    name: new Date(r.completedAt || r.date).toLocaleDateString(),
-    score: (r.score / r.totalQuestions) * 100
-  }));
 
   return (
     <div className="space-y-8">

@@ -56,22 +56,36 @@ const App: React.FC = () => {
       }
     }
 
-    // Load data from Supabase
-    const loadSupabaseData = async () => {
+    // Load data from backend API
+    const loadBackendData = async () => {
       try {
-        const [supaQuizzes, supaResults, supaNotes] = await Promise.all([
-          quizService.getAllQuizzes(),
-          resultsService.getAllResults(),
-          notesService.getAllNotes(),
+        const [quizzesRes, resultsRes, notesRes] = await Promise.all([
+          fetch('/api/get-quizzes'),
+          fetch('/api/get-results'),
+          fetch('/api/get-notes')
         ]);
-        if (supaQuizzes.length > 0) setQuizzes(supaQuizzes);
-        if (supaResults.length > 0) setResults(supaResults);
-        if (supaNotes.length > 0) setNotes(supaNotes);
+        
+        const [quizzesData, resultsData, notesData] = await Promise.all([
+          quizzesRes.json(),
+          resultsRes.json(),
+          notesRes.json()
+        ]);
+        
+        if (quizzesData.success && quizzesData.quizzes.length > 0) {
+          setQuizzes(quizzesData.quizzes);
+        }
+        if (resultsData.success && resultsData.results.length > 0) {
+          setResults(resultsData.results);
+        }
+        if (notesData.success && notesData.notes.length > 0) {
+          setNotes(notesData.notes);
+        }
       } catch (err) {
-        console.error('Failed to load Supabase data:', err);
+        console.error('Failed to load backend data:', err);
+        // Fallback to initial data if backend fails
       }
     };
-    loadSupabaseData();
+    loadBackendData();
   }, []);
 
   // persist login draft whenever form fields change
@@ -164,8 +178,9 @@ const App: React.FC = () => {
     }
     
     // Student login (allow any credentials)
+    const studentId = email ? `s-${btoa(email).replace(/[^a-zA-Z0-9]/g, '').substring(0, 10)}` : `s-${Date.now()}`;
     const loggedUser: User = {
-      id: `s-${Date.now()}`,
+      id: studentId,
       name: name.trim() || 'Student',
       email: email || 'student@edusphere.com',
       role: role,
@@ -178,6 +193,39 @@ const App: React.FC = () => {
     
     setUser(loggedUser);
     setActiveTab('dashboard');
+  };
+
+  // Function to refresh data from backend (silent)
+  const refreshData = async () => {
+    try {
+      const [quizzesRes, resultsRes, notesRes] = await Promise.all([
+        fetch('/api/get-quizzes'),
+        fetch('/api/get-results'),
+        fetch('/api/get-notes')
+      ]);
+      
+      const [quizzesData, resultsData, notesData] = await Promise.all([
+        quizzesRes.json(),
+        resultsRes.json(),
+        notesRes.json()
+      ]);
+      
+      if (quizzesData.success) setQuizzes(quizzesData.quizzes);
+      if (resultsData.success) setResults(resultsData.results);
+      if (notesData.success) setNotes(notesData.notes);
+    } catch (err) {
+      console.error('Failed to refresh data:', err);
+    }
+  };
+
+  // Function to manually refresh data with toast feedback
+  const manualRefreshData = async () => {
+    try {
+      await refreshData();
+      toast.show('Data refreshed successfully', 'success');
+    } catch (err) {
+      toast.show('Failed to refresh data', 'error');
+    }
   };
 
   const addNote = (note: Note) => {
@@ -195,6 +243,7 @@ const App: React.FC = () => {
           toast.show('Note saved locally but failed to sync to server', 'warning');
         } else {
           console.log('Note saved to database via backend');
+          refreshData();
         }
       })
       .catch(err => {
@@ -218,6 +267,8 @@ const App: React.FC = () => {
           toast.show('Quiz saved locally but failed to sync to server', 'warning');
         } else {
           console.log('Quiz saved to database via backend');
+          // Refresh data to ensure all users see the new quiz
+          refreshData();
         }
       })
       .catch(err => {
@@ -241,6 +292,7 @@ const App: React.FC = () => {
           toast.show('Result saved locally but failed to sync to server', 'warning');
         } else {
           console.log('Result saved to database via backend');
+          refreshData();
         }
       })
       .catch(err => {
@@ -437,6 +489,13 @@ const App: React.FC = () => {
             >
               {theme === 'dark' ? <FiSun size={20} /> : <FiMoon size={20} />}
             </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg transition-colors"
+              title="Logout"
+            >
+              <FiLogOut size={20} />
+            </button>
           </div>
         </div>
       </div>
@@ -460,6 +519,15 @@ const App: React.FC = () => {
             </h1>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={manualRefreshData}
+              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+              title="Refresh data"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
             <div className="hidden sm:block text-right">
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{user.name}</p>
               <p className="text-xs text-slate-400 dark:text-slate-500">{user.email}</p>
@@ -469,6 +537,14 @@ const App: React.FC = () => {
               alt="avatar" 
               className="w-12 h-12 rounded-full border-2 border-indigo-100 shadow-sm object-cover bg-slate-200"
             />
+            <button
+              onClick={handleLogout}
+              className="md:hidden flex items-center gap-2 px-3 py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all text-sm font-medium"
+              title="Logout"
+            >
+              <FiLogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
           </div>
         </header>
 
@@ -496,9 +572,20 @@ const App: React.FC = () => {
           )
         )}
 
-        {activeTab === 'notes' && <NotesView notes={notes} />}
+        {activeTab === 'notes' && (
+          <NotesView 
+            notes={notes} 
+            onRefresh={manualRefreshData}
+          />
+        )}
         {activeTab === 'results' && user.role === UserRole.STUDENT && (
-          <ResultsView studentId={user.id} studentName={user.name} />
+          <ResultsView 
+            studentId={user.id} 
+            studentName={user.name} 
+            results={results} 
+            quizzes={quizzes}
+            onRefresh={manualRefreshData}
+          />
         )}
         {activeTab === 'forum' && <DiscussionForum user={user} />}
         {activeTab === 'profile' && (
